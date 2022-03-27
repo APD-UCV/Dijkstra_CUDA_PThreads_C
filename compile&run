@@ -1,0 +1,7 @@
+// to compile with pthreads
+gcc -pthread -g *
+
+// to compile serial
+
+// executable output
+./exec.out
