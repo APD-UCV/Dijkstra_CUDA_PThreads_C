@@ -1,4 +1,8 @@
 #include "Dijkstra.h"
+#include "MinHeap.h"
+
+int TREE_ARRAY_SIZE = 0;
+int HEAP_SIZE = 0;
 
 char parrentDirectoryPath[MAX_BUF];
 char inputTestsPath[MAX_BUF];
@@ -80,23 +84,14 @@ FUNC(void, HOST) initArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size, 
     }
 }
 
-FUNC(int, HOST) closestVertex(P2CONST(int, HOST) shortestDistances, P2CONST(int, HOST) processedVertices, P2CONST(int, HOST) numVertices)
-{
-    int min = INF_DIST;
-    int min_index = -1;
-    for(int vertexIt = 0; vertexIt < *numVertices; ++vertexIt)
-    {
-        if(processedVertices[vertexIt] == NOT_MARKED && shortestDistances[vertexIt] <= min)
-        {
-            min = shortestDistances[vertexIt];
-            min_index = vertexIt;
-        }
-    }
-    return min_index;
-}
-
 FUNC(void, HOST) Dijkstra(P2CONST(int, HOST) adjMatrix, P2VAR(int, HOST) shortestDistances, P2VAR(int, HOST) processedVertices, P2CONST(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber)
 {
+    TREE_ARRAY_SIZE = *numVertices;
+    Distance2Node minHeap[TREE_ARRAY_SIZE];
+    
+    Distance2Node distance2Source = {SOURCE_VERTEX, 0};
+    insert(minHeap, distance2Source);
+
     /*Config timer data*/
     clock_t startTimerEvent, stopTimerEvent;
     float elapsedTimeMs = 0;
@@ -104,20 +99,26 @@ FUNC(void, HOST) Dijkstra(P2CONST(int, HOST) adjMatrix, P2VAR(int, HOST) shortes
     /*Run Dijkstra parallel algorithm*/
     startTimerEvent = clock();
 
-    for(int vertexIt = 0; vertexIt < *numVertices - 1; ++vertexIt)
+    while(HEAP_SIZE > 0)
     {
-        int startVertex = closestVertex(shortestDistances, processedVertices, numVertices);
-        processedVertices[startVertex] = MARKED;
+        Distance2Node closestVertex = extractMin(minHeap); // closestVertex(shortestDistances, processedVertices, numVertices);
+
+        if(closestVertex.distance > shortestDistances[closestVertex.nodeId])
+        {
+            continue;
+        }
+
         for(int endVertex = 0; endVertex <*numVertices; ++endVertex)
         {
-            if(processedVertices[endVertex] == NOT_MARKED && adjMatrix[startVertex * (*numVertices) + endVertex] != 0 
-                && shortestDistances[startVertex] + adjMatrix[startVertex * (*numVertices) + endVertex] < shortestDistances[endVertex])
+            if(adjMatrix[closestVertex.nodeId * (*numVertices) + endVertex] != 0 && 
+                    closestVertex.distance + adjMatrix[closestVertex.nodeId * (*numVertices) + endVertex] < shortestDistances[endVertex])
             {
-                shortestDistances[endVertex] = shortestDistances[startVertex] + adjMatrix[startVertex * (*numVertices) + endVertex];
+                shortestDistances[endVertex] = closestVertex.distance + adjMatrix[closestVertex.nodeId * (*numVertices) + endVertex];
+                Distance2Node distance2EndVertex = {endVertex, shortestDistances[endVertex]};
+                insert(minHeap, distance2EndVertex);
             }
         }
     }
-
 
     stopTimerEvent = clock();
 

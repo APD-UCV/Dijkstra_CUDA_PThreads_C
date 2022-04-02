@@ -15,7 +15,7 @@
 
 /* Local application / library specific imports */
 #include "ProjectDefinitions.h"
-
+#include "thpool.h"
 
 /*Config application specific macros*/
 #define INF_DIST (10000000)                 // Initial infinite distance between two nodes
@@ -52,8 +52,8 @@ EXTERN FUNC(void, HOST) initArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST)
 EXTERN FUNC(void, HOST) init2DArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size, CONSTVAR(int, HOST) initValue);
 
 // /*Processing functions*/
-EXTERN FUNC(P2VAR(void, HOST), HOST) processEdges(P2VAR(void, HOST) args);
-EXTERN FUNC(P2VAR(void, HOST), HOST) relaxEdges(P2VAR(void, HOST) args);
+EXTERN void* processEdges(P2VAR(void, HOST) args);
+EXTERN void* relaxEdges(P2VAR(void, HOST) args);
 EXTERN FUNC(int, HOST) allVerticesProcessed(P2CONST(int, HOST) processedVertices, P2CONST(int, HOST) numVertices);
 EXTERN FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestDistances, P2VAR(int, HOST) updateShortestDistances, P2VAR(int, HOST) processedVertices, P2VAR(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber);
 

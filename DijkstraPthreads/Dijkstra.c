@@ -92,7 +92,7 @@ FUNC(void, HOST) init2DArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size
     }
 }
 
-FUNC(P2VAR(void, HOST), HOST) processEdges(P2VAR(void, HOST) args)
+void* processEdges(P2VAR(void, HOST) args)
 {
     GraphInfo_t* graphInfo = (GraphInfo_t*)args;
     int threadId = *(graphInfo->threadId);
@@ -104,24 +104,19 @@ FUNC(P2VAR(void, HOST), HOST) processEdges(P2VAR(void, HOST) args)
             graphInfo->processedVertices[threadId] = NOT_MARKED;
 
             for (int edge = 0; edge < *(graphInfo->numVertices); edge++) {
-                if (graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge] != 0)
+                if (graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge] != 0 &&
+                        graphInfo->updateShortestDistances[edge] > graphInfo->shortestDistances[threadId] + graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge])
                 {
                     pthread_mutex_lock(graphInfo->mutex_lock);
-
-                    graphInfo->updateShortestDistances[edge] = MIN(graphInfo->updateShortestDistances[edge], 
-                            graphInfo->shortestDistances[threadId] + graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge]);
-
+                    graphInfo->updateShortestDistances[edge] = graphInfo->shortestDistances[threadId] + graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge];
                     pthread_mutex_unlock(graphInfo->mutex_lock);
                 }
             }
         }
     }
-
-    pthread_exit(NULL);
-
 }
 
-FUNC(P2VAR(void, HOST), HOST) relaxEdges(P2VAR(void, HOST) args)
+void* relaxEdges(P2VAR(void, HOST) args)
 {
 
     GraphInfo_t* graphInfo = (GraphInfo_t*)args;
@@ -135,8 +130,6 @@ FUNC(P2VAR(void, HOST), HOST) relaxEdges(P2VAR(void, HOST) args)
 
         graphInfo->updateShortestDistances[threadId] = graphInfo->shortestDistances[threadId];
     }
-
-    pthread_exit(NULL);
 }
 
 FUNC(STD_RETURN_TYPE, HOST) allVerticesProcessed(P2CONST(int, HOST) processedVertices, P2CONST(int, HOST) numVertices)
@@ -160,14 +153,16 @@ FUNC(void, HOST) synchronizePthreads(P2CONST(pthread_t, HOST) threadList, P2CONS
 	}
 }
 
+threadpool thpool;
+
+
 FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestDistances, P2VAR(int, HOST) updateShortestDistances, P2VAR(int, HOST) processedVertices, P2VAR(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber)
 {
     /*Config timer data*/
     clock_t startTimerEvent, stopTimerEvent;
     float elapsedTimeMs = 0;
 
-    pthread_t* threadList;
-    pthread_attr_t attr;
+
     GraphInfo_t* graphInfo;
     pthread_mutex_t* mutex_lock;
 
@@ -187,11 +182,6 @@ FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestD
         graphInfo[threadId].mutex_lock = mutex_lock;        
     }
     
-    threadList = (pthread_t*)malloc(*numVertices * sizeof(pthread_t));
-
-    pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-    
     /*Run Dijkstra parallel algorithm*/
     startTimerEvent = clock();
 
@@ -200,31 +190,30 @@ FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestD
         for (int asyncIt = 0; asyncIt < NUM_ASYNCHRONOUS_ITERATIONS; ++asyncIt) {
             
             for (int threadId = 0; threadId < *numVertices; ++threadId) {
-                pthread_create(&threadList[threadId], &attr, (void*)processEdges, (void*) &graphInfo[threadId]);         
+                thpool_add_work(thpool, (void*)processEdges, (void*) &graphInfo[threadId]);
             }
 
-	        synchronizePthreads(threadList, numVertices);
+            thpool_wait(thpool);
 
             for (int threadId = 0; threadId < *numVertices; ++threadId) {
-                pthread_create(&threadList[threadId], &attr, (void*)relaxEdges, (void*) &graphInfo[threadId]);         
+                thpool_add_work(thpool, (void*)relaxEdges, (void*) &graphInfo[threadId]);                
             }
+            thpool_wait(thpool);
 
-	        synchronizePthreads(threadList, numVertices);
         }
     }
 
     stopTimerEvent = clock();
 
     /*Calculate elapsed time*/
-    elapsedTimeMs = (float)(stopTimerEvent - startTimerEvent)/CLOCKS_PER_SEC;
+    elapsedTimeMs = ((float)(stopTimerEvent - startTimerEvent)/CLOCKS_PER_SEC) * 1000;
 
     /*Print collected data*/
     printCollectedData(shortestDistances, numVertices, elapsedTimeMs, testCaseNumber);
 
     /*Free threads used memory*/
-    pthread_attr_destroy(&attr);
+    //thpool_destroy(thpool);
     pthread_mutex_destroy(mutex_lock);
-	free(threadList);		
     for(int i =0; i<*numVertices; ++i)
     {
         free(graphInfo[i].threadId); 
@@ -242,9 +231,10 @@ FUNC(void, HOST) startTests()
     int* shortestDistances;
     int* updateShortestDistances;
     int* processedVertices;
+    thpool = thpool_init(8192);
 
     /*Run the algorithm for every test case*/
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 7; i++) {
 
         /*Cumpute the path to the current test case*/
         inputTestsPath[strlen(inputTestsPath) - 4] = i + '0';
@@ -284,6 +274,9 @@ FUNC(void, HOST) startTests()
         free(shortestDistances);
         free(updateShortestDistances);
         free(processedVertices);
-
     }
+
+
+    thpool_destroy(thpool);
+
 }

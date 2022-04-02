@@ -17,7 +17,6 @@
 
 
 /*Config application specific macros*/
-#define INF_DIST (10000000)                 // Initial infinite distance between two nodes
 #define NUM_ASYNCHRONOUS_ITERATIONS (20)    // Number of async loop iterations before attempting to read results back
 #define THREADS_PER_BLOCK (128)				// Number of threads assigned per block
 #define MAX_BUF (200)						// Maximum size of path string
