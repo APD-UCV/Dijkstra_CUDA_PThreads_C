@@ -3,6 +3,7 @@
 char parrentDirectoryPath[MAX_BUF];
 char inputTestsPath[MAX_BUF];
 char outputTestsPath[MAX_BUF];
+threadpool thpool;
 
 FUNC(void, HOST) getParentDirectoryPath()
 {
@@ -29,7 +30,7 @@ FUNC(void, HOST) getParentDirectoryPath()
     }
 }
 
-FUNC(P2VAR(int, HOST), HOST) readInputData(P2VAR(int, HOST) numVertices)
+FUNC(P2VAR(Node, HOST), HOST) readInputData(P2VAR(int, HOST) numVertices, P2VAR(int, HOST) numEdges)
 {
     FILE* pf = fopen(inputTestsPath, "r");;
 
@@ -39,19 +40,50 @@ FUNC(P2VAR(int, HOST), HOST) readInputData(P2VAR(int, HOST) numVertices)
         return NULL;
     }
 
-    fscanf(pf, "%d", numVertices);
+    fscanf(pf, "%d %d", numVertices, numEdges);
 
-    int* adjMatrix = (int*)malloc(*numVertices * *numVertices * sizeof(int));
-    for (int i = 0; i < *numVertices; ++i)
+    Node* graph = (Node*)malloc(*numVertices * sizeof(Node)); 
+
+    int no_neighbors = -1;
+    for(int i =0; i < *numVertices; i++)
     {
-        for (int j = 0; j < (*numVertices); ++j)
+        fscanf(pf, "%d", &no_neighbors);
+        graph[i].node_id = i;
+        graph[i].no_neighbors = no_neighbors;
+        if(no_neighbors == 0)
         {
-            fscanf(pf, "%d ", &adjMatrix[i * (*numVertices) + j]);
+            graph[i].adj_list = (int**)malloc(1 * sizeof(int*));
+        }
+        else
+        {
+            graph[i].adj_list = (int**)malloc(no_neighbors * sizeof(int*));
+        }
+        
+        for(int j =0; j < no_neighbors; j++)
+        {
+            graph[i].adj_list[j] = (int*)malloc(2*sizeof(int));
         }
     }
 
+    int startEdge;
+    int endEdge;
+    int weight;
+    for(int i =0; i<*numVertices; i++)
+    {
+        if(graph[i].no_neighbors == 0)
+            continue;
+        for(int j =0; j<graph[i].no_neighbors; j++)
+        {
+            fscanf(pf, "%d %d %d", &startEdge, &endEdge, &weight);
+            graph[i].adj_list[j][0] = endEdge;
+            graph[i].adj_list[j][1] = weight;
+        }
+    }
+
+
+
     fclose(pf);
-    return adjMatrix;
+    return graph;
 }
 
 FUNC(void, HOST) printCollectedData(P2CONST(int, HOST) shortestDistances, P2CONST(int, HOST) numVertices, CONSTVAR(float, HOST) elapsedTimeMs, CONSTVAR(int, HOST) testCaseNumber)
@@ -80,16 +112,18 @@ FUNC(void, HOST) initArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size, 
     }
 }
 
-FUNC(void, HOST) init2DArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size, CONSTVAR(int, HOST) initValue)
+FUNC(STD_RETURN_TYPE, HOST) allVerticesProcessed(P2CONST(int, HOST) processedVertices, P2CONST(int, HOST) numVertices)
 {
 
-    for (int i = 0; i < *size; ++i)
+    for (int i = 0; i < *numVertices; i++)
     {
-        for (int j = 0; j < *size; ++j)
+        if (processedVertices[i] == MARKED)
         {
-            arrayData[i * (*size) + j] = initValue;
+            return STD_NOT_OK;
         }
     }
+
+    return STD_OK;
 }
 
 void* processEdges(P2VAR(void, HOST) args)
@@ -103,15 +137,15 @@ void* processEdges(P2VAR(void, HOST) args)
 
             graphInfo->processedVertices[threadId] = NOT_MARKED;
 
-            for (int edge = 0; edge < *(graphInfo->numVertices); edge++) {
-                if (graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge] != 0 &&
-                        graphInfo->updateShortestDistances[edge] > graphInfo->shortestDistances[threadId] + graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge])
+            for(int i=0; i<graphInfo->graph[threadId].no_neighbors; i++)
+            {
+                if (graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i][1] < graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i][0]])
                 {
                     pthread_mutex_lock(graphInfo->mutex_lock);
-                    graphInfo->updateShortestDistances[edge] = graphInfo->shortestDistances[threadId] + graphInfo->adjMatrix[threadId * *(graphInfo->numVertices) + edge];
+                    graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i][0]] = graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i][1];
                     pthread_mutex_unlock(graphInfo->mutex_lock);
                 }
-            }
+            }   
         }
     }
 }
@@ -132,31 +166,8 @@ void* relaxEdges(P2VAR(void, HOST) args)
     }
 }
 
-FUNC(STD_RETURN_TYPE, HOST) allVerticesProcessed(P2CONST(int, HOST) processedVertices, P2CONST(int, HOST) numVertices)
-{
 
-    for (int i = 0; i < *numVertices; i++)
-    {
-        if (processedVertices[i] == MARKED)
-        {
-            return STD_NOT_OK;
-        }
-    }
-
-    return STD_OK;
-}
-
-FUNC(void, HOST) synchronizePthreads(P2CONST(pthread_t, HOST) threadList, P2CONST(int, HOST) listSize)
-{
-    for(int threadId=0; threadId < *listSize; ++threadId){
-	    pthread_join(threadList[threadId], NULL);		
-	}
-}
-
-threadpool thpool;
-
-
-FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestDistances, P2VAR(int, HOST) updateShortestDistances, P2VAR(int, HOST) processedVertices, P2VAR(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber)
+FUNC(void, HOST) Dijkstra(P2VAR(Node, HOST) graph, P2VAR(int, HOST) shortestDistances, P2VAR(int, HOST) updateShortestDistances, P2VAR(int, HOST) processedVertices, P2VAR(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber)
 {
     /*Config timer data*/
     clock_t startTimerEvent, stopTimerEvent;
@@ -172,7 +183,7 @@ FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestD
     graphInfo = (GraphInfo_t*)malloc(*numVertices * sizeof(GraphInfo_t));
     for(int threadId =0; threadId < *numVertices; ++threadId)
     {
-        graphInfo[threadId].adjMatrix = adjMatrix;
+        graphInfo[threadId].graph = graph;
         graphInfo[threadId].shortestDistances = shortestDistances;
         graphInfo[threadId].updateShortestDistances = updateShortestDistances;
         graphInfo[threadId].processedVertices = processedVertices;
@@ -199,7 +210,6 @@ FUNC(void, HOST) Dijkstra(P2VAR(int, HOST) adjMatrix, P2VAR(int, HOST) shortestD
                 thpool_add_work(thpool, (void*)relaxEdges, (void*) &graphInfo[threadId]);                
             }
             thpool_wait(thpool);
-
         }
     }
 
@@ -227,14 +237,16 @@ FUNC(void, HOST) startTests()
 
     /*Host global variables*/
     int* numVertices;
-    int* adjMatrix;
+    int* numEdges;
+    Node* graph;
     int* shortestDistances;
     int* updateShortestDistances;
     int* processedVertices;
     thpool = thpool_init(8192);
 
+
     /*Run the algorithm for every test case*/
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
 
         /*Cumpute the path to the current test case*/
         inputTestsPath[strlen(inputTestsPath) - 4] = i + '0';
@@ -243,37 +255,36 @@ FUNC(void, HOST) startTests()
         /*Init the host input variables*/
 
         numVertices = (int*)malloc(sizeof(int));
-        adjMatrix = readInputData(numVertices);
-        if (adjMatrix == NULL) {
-            printf("\nInput fetch failed\n");
-            return;
-        }
+        numEdges = (int*)malloc(sizeof(int));
+
+        graph = readInputData(numVertices, numEdges);
 
         /*Init host global variables*/
         shortestDistances = (int*)malloc(*numVertices * sizeof(int));
         updateShortestDistances = (int*)malloc(*numVertices * sizeof(int));
         processedVertices = (int*)malloc(*numVertices * sizeof(int));
 
-
         initArray(shortestDistances, numVertices, INF_DIST);
         initArray(updateShortestDistances, numVertices, INF_DIST);
         initArray(processedVertices, numVertices, (int)NOT_MARKED);
-        
+
+        /*Init host global variables*/
         shortestDistances[SOURCE_VERTEX] = 0;
         updateShortestDistances[SOURCE_VERTEX] = 0;
         processedVertices[SOURCE_VERTEX] = MARKED;
 
         /*Run dijkstra*/
-        Dijkstra(adjMatrix, shortestDistances, updateShortestDistances, processedVertices, numVertices, i);
+        Dijkstra(graph, shortestDistances, updateShortestDistances, processedVertices, numVertices, i);
 
         printf("Test %d finished\n\n", i);
 
         /*Free host memory*/
+        free(numEdges);
         free(numVertices);
-        free(adjMatrix);
-        free(shortestDistances);
         free(updateShortestDistances);
+        free(shortestDistances);
         free(processedVertices);
+        free(graph);
     }
 
 

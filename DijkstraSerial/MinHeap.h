@@ -7,8 +7,8 @@
 
 #define INF_DIST (10000000)                 // Initial infinite distance between two nodes
 
-EXTERN int TREE_ARRAY_SIZE;
-EXTERN int HEAP_SIZE;
+EXTERN long long TREE_ARRAY_SIZE;
+EXTERN long long HEAP_SIZE;
 
 typedef struct NodeStruct {
     int nodeId;
