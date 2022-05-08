@@ -20,11 +20,10 @@
 
 /*Config application specific macros*/
 #define INF_DIST (10000000)                 // Initial infinite distance between two nodes
-#define NUM_ASYNCHRONOUS_ITERATIONS (20)    // Number of async loop iterations before attempting to read results back
 #define THREADS_PER_BLOCK (128)				// Number of threads assigned per block
 #define MAX_BUF (200)						// Maximum size of path string
 #define SOURCE_VERTEX (0)					// Source vertex
-
+#define THREAD_POOL_SIZE  (8192)
 
 typedef struct graphInfo {
     Node* graph;
@@ -32,7 +31,7 @@ typedef struct graphInfo {
     int* updateShortestDistances;
     int* processedVertices;
     int* numVertices;
-    int* threadId;
+    int threadId;
     pthread_mutex_t* mutex_lock;
 } GraphInfo_t;
 

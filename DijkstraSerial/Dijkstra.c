@@ -46,45 +46,34 @@ FUNC(P2VAR(Node, HOST), HOST) readInputData(P2VAR(int, HOST) numVertices, P2VAR(
 
     fscanf(pf, "%d %d", numVertices, numEdges);
 
-    Node* graph = (Node*)malloc(*numVertices * sizeof(Node)); 
+    Node* graph = (Node*)malloc((*numVertices) * sizeof(Node)); 
 
     int no_neighbors = -1;
     for(int i =0; i < *numVertices; i++)
     {
         fscanf(pf, "%d", &no_neighbors);
-        graph[i].node_id = i;
         graph[i].no_neighbors = no_neighbors;
-        if(no_neighbors == 0)
+
+        if (no_neighbors != 0)
         {
-            graph[i].adj_list = (int**)malloc(1 * sizeof(int*));
-        }
-        else
-        {
-            graph[i].adj_list = (int**)malloc(no_neighbors * sizeof(int*));
-        }
-        
-        for(int j =0; j < no_neighbors; j++)
-        {
-            graph[i].adj_list[j] = (int*)malloc(2*sizeof(int));
+            graph[i].adj_list = (int*)malloc(no_neighbors * 2 * sizeof(int));
         }
     }
 
     int startEdge;
     int endEdge;
     int weight;
-    for(int i =0; i<*numVertices; i++)
+    for(int i =0; i < *numVertices; i++)
     {
         if(graph[i].no_neighbors == 0)
             continue;
-        for(int j =0; j<graph[i].no_neighbors; j++)
+        for(int j =0; j < 2 * graph[i].no_neighbors; j += 2)
         {
             fscanf(pf, "%d %d %d", &startEdge, &endEdge, &weight);
-            graph[i].adj_list[j][0] = endEdge;
-            graph[i].adj_list[j][1] = weight;
+            graph[i].adj_list[j] = endEdge;
+            graph[i].adj_list[j+1] = weight;
         }
     }
-
-
 
     fclose(pf);
     return graph;
@@ -118,7 +107,7 @@ FUNC(void, HOST) initArray(P2VAR(int, HOST) arrayData, P2CONST(int, HOST) size, 
 
 FUNC(void, HOST) Dijkstra(P2CONST(Node, HOST) graph, P2VAR(int, HOST) shortestDistances, P2CONST(int, HOST) numVertices, CONSTVAR(int, HOST) testCaseNumber)
 {
-    TREE_ARRAY_SIZE = *numVertices * 5;
+    TREE_ARRAY_SIZE = 500000;
     Distance2Node minHeap[TREE_ARRAY_SIZE];
     
     Distance2Node distance2Source = {SOURCE_VERTEX, 0};
@@ -133,19 +122,19 @@ FUNC(void, HOST) Dijkstra(P2CONST(Node, HOST) graph, P2VAR(int, HOST) shortestDi
 
     while(HEAP_SIZE > 0)
     {
-        Distance2Node closestVertex = extractMin(minHeap); // closestVertex(shortestDistances, processedVertices, numVertices);
+        Distance2Node closestVertex = extractMin(minHeap);
 
         if(closestVertex.distance > shortestDistances[closestVertex.nodeId])
         {
             continue;
         }
 
-        for(int i=0; i<graph[closestVertex.nodeId].no_neighbors; i++)
+        for(int i=0; i< 2 * graph[closestVertex.nodeId].no_neighbors; i += 2)
         {
-            if (closestVertex.distance + graph[closestVertex.nodeId].adj_list[i][1] < shortestDistances[graph[closestVertex.nodeId].adj_list[i][0]])
+            if (closestVertex.distance + graph[closestVertex.nodeId].adj_list[i+1] < shortestDistances[graph[closestVertex.nodeId].adj_list[i]])
             {
-                shortestDistances[graph[closestVertex.nodeId].adj_list[i][0]] = closestVertex.distance + graph[closestVertex.nodeId].adj_list[i][1];
-                Distance2Node distance2EndVertex = {graph[closestVertex.nodeId].adj_list[i][0], shortestDistances[graph[closestVertex.nodeId].adj_list[i][0]]};
+                shortestDistances[graph[closestVertex.nodeId].adj_list[i]] = closestVertex.distance + graph[closestVertex.nodeId].adj_list[i+1];
+                Distance2Node distance2EndVertex = {graph[closestVertex.nodeId].adj_list[i], shortestDistances[graph[closestVertex.nodeId].adj_list[i]]};
                 insert(minHeap, distance2EndVertex);
             }
         }
@@ -191,22 +180,20 @@ FUNC(void, HOST) startTests()
 
         shortestDistances[SOURCE_VERTEX] = 0;
 
-
-        // for(int i=0; i<*numVertices; i++)
-        // {
-        //     for(int j =0; j <graph[i].no_neighbors; j++)
-        //     {
-        //         printf("%d -> %d , %d\n", i, graph[i].adj_list[j][0], graph[i].adj_list[j][1]);
-        //     }
-        // }
-
         /*Run dijkstra*/
         Dijkstra(graph, shortestDistances, numVertices, i);
 
         printf("Test %d finished\n\n", i);
 
+        for(int i =0; i < *numVertices; i++)
+        {
+            if(graph[i].no_neighbors != 0)
+                free(graph[i].adj_list);
+        }
+
         /*Free host memory*/
         free(numVertices);
+        free(numEdges);
         free(shortestDistances);
         free(graph);
 

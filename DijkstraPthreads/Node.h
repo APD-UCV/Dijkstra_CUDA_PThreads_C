@@ -4,9 +4,8 @@
 
 
 typedef struct node{
-    int node_id;
     int no_neighbors;
-    int** adj_list;
+    int* adj_list;
 } Node;
 
 

@@ -42,45 +42,34 @@ FUNC(P2VAR(Node, HOST), HOST) readInputData(P2VAR(int, HOST) numVertices, P2VAR(
 
     fscanf(pf, "%d %d", numVertices, numEdges);
 
-    Node* graph = (Node*)malloc(*numVertices * sizeof(Node)); 
+    Node* graph = (Node*)malloc((*numVertices) * sizeof(Node)); 
 
     int no_neighbors = -1;
     for(int i =0; i < *numVertices; i++)
     {
         fscanf(pf, "%d", &no_neighbors);
-        graph[i].node_id = i;
         graph[i].no_neighbors = no_neighbors;
-        if(no_neighbors == 0)
+
+        if (no_neighbors != 0)
         {
-            graph[i].adj_list = (int**)malloc(1 * sizeof(int*));
-        }
-        else
-        {
-            graph[i].adj_list = (int**)malloc(no_neighbors * sizeof(int*));
-        }
-        
-        for(int j =0; j < no_neighbors; j++)
-        {
-            graph[i].adj_list[j] = (int*)malloc(2*sizeof(int));
+            graph[i].adj_list = (int*)malloc(no_neighbors * 2 * sizeof(int));
         }
     }
 
     int startEdge;
     int endEdge;
     int weight;
-    for(int i =0; i<*numVertices; i++)
+    for(int i =0; i < *numVertices; i++)
     {
         if(graph[i].no_neighbors == 0)
             continue;
-        for(int j =0; j<graph[i].no_neighbors; j++)
+        for(int j =0; j < 2 * graph[i].no_neighbors; j += 2)
         {
             fscanf(pf, "%d %d %d", &startEdge, &endEdge, &weight);
-            graph[i].adj_list[j][0] = endEdge;
-            graph[i].adj_list[j][1] = weight;
+            graph[i].adj_list[j] = endEdge;
+            graph[i].adj_list[j+1] = weight;
         }
     }
-
-
 
     fclose(pf);
     return graph;
@@ -129,7 +118,7 @@ FUNC(STD_RETURN_TYPE, HOST) allVerticesProcessed(P2CONST(int, HOST) processedVer
 void* processEdges(P2VAR(void, HOST) args)
 {
     GraphInfo_t* graphInfo = (GraphInfo_t*)args;
-    int threadId = *(graphInfo->threadId);
+    int threadId = graphInfo->threadId;
 
     if (threadId < *(graphInfo->numVertices)) {
 
@@ -137,12 +126,12 @@ void* processEdges(P2VAR(void, HOST) args)
 
             graphInfo->processedVertices[threadId] = NOT_MARKED;
 
-            for(int i=0; i<graphInfo->graph[threadId].no_neighbors; i++)
+            for(int i=0; i < 2 * graphInfo->graph[threadId].no_neighbors; i+=2)
             {
-                if (graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i][1] < graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i][0]])
+                if (graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i+1] < graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i]])
                 {
                     pthread_mutex_lock(graphInfo->mutex_lock);
-                    graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i][0]] = graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i][1];
+                    graphInfo->updateShortestDistances[graphInfo->graph[threadId].adj_list[i]] = graphInfo->shortestDistances[threadId] + graphInfo->graph[threadId].adj_list[i+1];
                     pthread_mutex_unlock(graphInfo->mutex_lock);
                 }
             }   
@@ -154,7 +143,7 @@ void* relaxEdges(P2VAR(void, HOST) args)
 {
 
     GraphInfo_t* graphInfo = (GraphInfo_t*)args;
-    int threadId = *(graphInfo->threadId);
+    int threadId = graphInfo->threadId;
 
     if (threadId < *(graphInfo->numVertices)) {
         if (graphInfo->shortestDistances[threadId] > graphInfo->updateShortestDistances[threadId]) {
@@ -188,8 +177,7 @@ FUNC(void, HOST) Dijkstra(P2VAR(Node, HOST) graph, P2VAR(int, HOST) shortestDist
         graphInfo[threadId].updateShortestDistances = updateShortestDistances;
         graphInfo[threadId].processedVertices = processedVertices;
         graphInfo[threadId].numVertices = numVertices;
-        graphInfo[threadId].threadId = (int*)malloc(sizeof(int));
-        *(graphInfo[threadId].threadId) = threadId;
+        graphInfo[threadId].threadId = threadId;
         graphInfo[threadId].mutex_lock = mutex_lock;        
     }
     
@@ -197,20 +185,16 @@ FUNC(void, HOST) Dijkstra(P2VAR(Node, HOST) graph, P2VAR(int, HOST) shortestDist
     startTimerEvent = clock();
 
     while (STD_NOT_OK == allVerticesProcessed(processedVertices, numVertices)) {
-
-        for (int asyncIt = 0; asyncIt < NUM_ASYNCHRONOUS_ITERATIONS; ++asyncIt) {
             
-            for (int threadId = 0; threadId < *numVertices; ++threadId) {
-                thpool_add_work(thpool, (void*)processEdges, (void*) &graphInfo[threadId]);
-            }
-
-            thpool_wait(thpool);
-
-            for (int threadId = 0; threadId < *numVertices; ++threadId) {
-                thpool_add_work(thpool, (void*)relaxEdges, (void*) &graphInfo[threadId]);                
-            }
-            thpool_wait(thpool);
+        for (int threadId = 0; threadId < *numVertices; ++threadId) {
+            thpool_add_work(thpool, (void*)processEdges, (void*) &graphInfo[threadId]);
         }
+        thpool_wait(thpool);
+        for (int threadId = 0; threadId < *numVertices; ++threadId) {
+            thpool_add_work(thpool, (void*)relaxEdges, (void*) &graphInfo[threadId]);                
+        }
+        thpool_wait(thpool);
+        
     }
 
     stopTimerEvent = clock();
@@ -224,10 +208,6 @@ FUNC(void, HOST) Dijkstra(P2VAR(Node, HOST) graph, P2VAR(int, HOST) shortestDist
     /*Free threads used memory*/
     //thpool_destroy(thpool);
     pthread_mutex_destroy(mutex_lock);
-    for(int i =0; i<*numVertices; ++i)
-    {
-        free(graphInfo[i].threadId); 
-    }
     free(graphInfo);
 
 }
@@ -242,8 +222,7 @@ FUNC(void, HOST) startTests()
     int* shortestDistances;
     int* updateShortestDistances;
     int* processedVertices;
-    thpool = thpool_init(8192);
-
+    thpool = thpool_init(THREAD_POOL_SIZE);
 
     /*Run the algorithm for every test case*/
     for (int i = 0; i < 8; i++) {
@@ -279,6 +258,14 @@ FUNC(void, HOST) startTests()
         printf("Test %d finished\n\n", i);
 
         /*Free host memory*/
+
+        for (int i = 0; i < *numVertices; i++)
+        {
+            if(graph[i].no_neighbors != 0)
+                free(graph[i].adj_list);
+        }
+
+
         free(numEdges);
         free(numVertices);
         free(updateShortestDistances);

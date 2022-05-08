@@ -34,7 +34,7 @@ FUNC(void, HOST)  heapify(P2VAR(Distance2Node, HOST) minHeapArray, int index) {
   int leftChildIndex = getLeftChild(index);
   int rightChildIndex = getRightChild(index);
 
-  // finding smallest among index, left child and right child
+  // find the smallest value among left and right child
   int smallest = index;
 
   if ((leftChildIndex <= HEAP_SIZE) && (leftChildIndex>0)) {
@@ -49,7 +49,6 @@ FUNC(void, HOST)  heapify(P2VAR(Distance2Node, HOST) minHeapArray, int index) {
     }
   }
 
-  // smallest is not the node, node is not a heap
   if (smallest != index) {
     swap(&minHeapArray[index], &minHeapArray[smallest]);
     heapify(minHeapArray, smallest);

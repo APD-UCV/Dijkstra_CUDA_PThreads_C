@@ -8,7 +8,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/DijkstraPthreads/a.out",
+            "program": "${workspaceFolder}/DijkstraSerial/a.out",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
